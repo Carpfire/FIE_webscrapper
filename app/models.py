@@ -1,4 +1,4 @@
-from sqlalchemy import Table, Column, Integer, ForeignKey, String, Date
+from sqlalchemy import Boolean, Table, Column, Integer, ForeignKey, String, Date
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -35,7 +35,8 @@ class Tournament(Base):
     id = Column(Integer, primary_key=True)
     country = Column(String(255))
     city = Column(String(255))
-    date = Column(Date)
+    start_date = Column(Date)
+    end_date = Column(Date)
     bouts = relationship('Bout', backref='tournament', lazy='select')
     fencers = relationship('Fencer', secondary=tourn_fen, backref='tournament', lazy='select')
 
@@ -46,10 +47,11 @@ class Bout(Base):
     __tablename__ = 'bout'
     id = Column(Integer, primary_key = True)
     tournament_id = Column(Integer, ForeignKey('tournament.id'))
-    fencer_1_score = Column(Integer)
-    fencer_2_score = Column(Integer)
-    rnd = Column(Integer)
-    fencers = relationship('Fencer', secondary=fencers, backref='bouts', lazy='select')
+    fencer_w_score = Column(Integer)
+    fencer_l_score = Column(Integer)
+    rnd = Column(String)
+    fencer_win =  relationship('Fencer', secondary=fencers, backref='bouts', lazy='select')
+    fencer_lose = relationship('Fencer', secondary=fencers, backref='bouts', lazy='select')
 
 
 

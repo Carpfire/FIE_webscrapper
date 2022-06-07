@@ -1,3 +1,5 @@
+from xmlrpc.client import Boolean
+from importlib_metadata import Deprecated
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
@@ -8,50 +10,140 @@ from app.database import SessionLocal
 import time 
 import warnings
 import datetime
+from dataclasses import dataclass
 warnings.filterwarnings('ignore')
 
-class WebScrapper:
+class FIEPage:
 
     def __init__(self, weapon, age, comp_type, gender, team=False):
         self.service = Service(executable_path=ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service = self.service)
         self.weapon = weapon
+        self.weapon_dict={
+            'epee':1,
+            'foil':2,
+            'sabre':3 
+            }
         self.age_cat = age
         self.comp_type = comp_type
         self.gender = gender 
         self.team = team
-        
+        self.results_xpath = '/html/body/div[4]/div/div/div[1]/div/div[3]/div'
+        self.pools_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[1]/div/div[1]/div/span'
+        self.prelim_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[1]/div/div[3]/div/span'
+        self.tableu_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[1]/div/div[4]/div/span'
     def open_competions(self):
         self.driver.get('https://fie.org/competitions')
-
-    def filters(self):
-        #event: 1 == epee, 2 == foil, 3 == sabre
-        weapon_button = self.driver.find_element_by_xpath(f"//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='checkbox-row Search-options Search-options--open']/div[@class='indicators'][1]/label[{self.weapon}]/i")
+        return self
+    def previous(self, prev=True):
+        index = 1 if prev else 2
+        button = self.driver.find_element_by_xpath(f"/html/body/section[1]/div/div/div[1]/form/label[{index}]")
         self.driver.implicitly_wait(10)
-        ActionChains(self.driver).move_to_element(weapon_button).click(weapon_button).perform()
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self 
 
-        team_button = self.driver.find_element_by_xpath(f"//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='checkbox-row Search-options Search-options--open']/div[@class='indicators'][2]/label[{2 if self.team == True else 1}]/i")
+    def select_weapon(self, weapon=None):
+        if weapon is None:
+            weapon = self.weapon     
+        index = self.weapon_dict[weapon.lower()]
+        button = self.driver.find_element_by_xpath(f"//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='checkbox-row Search-options Search-options--open']/div[@class='indicators'][1]/label[{index}]/i")
         self.driver.implicitly_wait(10)
-        ActionChains(self.driver).move_to_element(team_button).click(team_button).perform()
-
-        #1==women 2 == men
-        gender_button = self.driver.find_element_by_xpath(f"//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='checkbox-row Search-options Search-options--open']/div[@class='indicators'][3]/label[{self.gender}]/i")
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+    def select_event_type(self, team=False):
+        index = 2 if team else 1
+        button = self.driver.find_element_by_xpath(f"//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='checkbox-row Search-options Search-options--open']/div[@class='indicators'][2]/label[{index}]/i")
         self.driver.implicitly_wait(10)
-        ActionChains(self.driver).move_to_element(gender_button).click(gender_button).perform()
-
-        #JO == Olympics, CHM == world championships, GP == Grand Prix, A == World Cup, SA == Sattelite, CHZ == Zonal Championships, OF == Official, NF == Non Official
-        type_button = self.driver.find_element_by_xpath("//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='select-row Search-options Search-options--advanced Search-options--open']/select[@id='competitionType']")
-        select = Select(type_button)
-        select.select_by_value(self.comp_type)
-
-        #Cadet === c, Junior == j, Senior== s, Vets == v
-        age_button = self.driver.find_element_by_xpath("//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='select-row Search-options Search-options--advanced Search-options--open']/select[@id='ageCategory']")
-        select = Select(age_button)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self 
+    def select_gender(self, gender=None):
+        if gender is None:
+            gender = self.gender
+        index = 2 if gender.lower() == 'm' else 1
+        button = self.driver.find_element_by_xpath(f"//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='checkbox-row Search-options Search-options--open']/div[@class='indicators'][3]/label[{index}]/i")
         self.driver.implicitly_wait(10)
-        select.select_by_value(self.age_cat)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self 
+    def comp_category(self, comp_type=None):
+        if comp_type is None:
+            comp_type = self.comp_type
+        button = self.driver.find_element_by_xpath("//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='select-row Search-options Search-options--advanced Search-options--open']/select[@id='competitionType']")
+        select = Select(button)
+        self.driver.implicitly_wait(10)
+        select.select_by_value(comp_type)
+        return self
+
+    def age_group(self, age_cat=None):
+        if age_cat is None:
+            age_cat = self.age_cat
+        button = self.driver.find_element_by_xpath("//div[@class='row']/div[@class='col-xs-12'][2]/form[@class='js-comp-form-search']/div[@class='filter-wrapper']/div[@class='sub-row']/div[@class='select-row Search-options Search-options--advanced Search-options--open']/select[@id='ageCategory']")
+        select = Select(button)
+        self.driver.implicitly_wait(10)
+        select.select_by_value(age_cat)
+        return self
+    
+    def dates(self):
+        #TODO: Implement Date Picker Method
+        pass
+    def to_results(self):
+        button = self.driver.find_element_by_xpath(self.results_xpath)
+        self.driver.implicitly_wait(10)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+    def to_tableu(self):
+        button = self.driver.find_element_by_xpath(self.tableu_xpath)
+        self.driver.implicitly_wait(10)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+    def to_pools(self):
+        button = self.driver.find_element_by_xpath(self.pools_xpath)
+        self.driver.implicitly_wait(10)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+    def to_prelims(self):
+        button = self.driver.find_element_by_xpath(self.prelim_xpath)
+        self.driver.implicitly_wait(10)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+
+    def next_round(self):
+        button_path = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[5]/div[2]/div/div[2]/div[8]/div'
+        button = self.driver.find_element_by_xpath(button_path)
+        self.driver.implicitly_wait(10)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
 
 
+    def get_prelim_data(self):
+        bout_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[4]/div[2]/div/div[2]/div/div'
+        bouts = self.driver.find_elements_by_xpath(bout_xpath)
+        bout_data = [bout.text.split('\n') for bout in bouts]
+        return [bout for bout in bout_data if len(bout) == 6]
+    def get_pools_data(self):
+        pool_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[2]/div[2]/div/div'
+        pool = self.driver.find_elements_by_xpath(pool_xpath)
+        pool_data = [element.text.split('\n') for element in pool]
+        return pool_data[2:]
 
+    def get_de_data(self):
+        de_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[5]/div[2]/div/div[2]/div/div'
+        de = self.driver.find_elements_by_xpath(de_xpath)
+        de_data = [elem.text.split('\n') for elem in de]
+        return [elem for elem in de_data if len(elem) == 6]
+
+
+    def next_page(self):
+        button_path = '/html/body/section[2]/section/div/div/div[1]/div/div/ul/li[7]/a'
+        button = self.driver.find_element_by_xpath(button_path)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+    def prev_page(self):
+        button_path = '/html/body/section[2]/section/div/div/div[1]/div/div/ul/li[1]/a'
+        button = self.driver.find_element_by_xpath(button_path)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+
+    
     def parse_tableue(self):
 
         size = ['small', 'medium', 'medium', 'big', 'big', 'big']
@@ -73,21 +165,11 @@ class WebScrapper:
         return bouts
 
 
-    def get_links(self):
-        #fetches the href of every row in the competitions table
-        links_1 = self.driver.find_elements_by_xpath("//section[@class='athletes-rankings-table results-competitions-table']/section[@class='statistics-table']/div[@class='container small']/div[@class='row']/div[@class='col-xs-12 js-competitions-grid']/div[@class='table-parent']/table[@class='table']/a[@class='Table-row Table-row--hover CompetitionsTable-row CompetitionsTable-row--borderBottom']")
-        self.driver.implicitly_wait(10)
-        results_2 = self.driver.find_elements_by_xpath("//div[@class='row']/div[@class='col-xs-12 js-competitions-grid']/div[@class='table-parent']/table[@class='table']/a[@class='Table-row Table-row--hover CompetitionsTable-row CompetitionsTable-row--borderBottom CompetitionsTable-row--even']/td[8]")
-        self.driver.implicitly_wait(10)
-        links_2 = self.driver.find_elements_by_xpath("//section[@class='athletes-rankings-table results-competitions-table']/section[@class='statistics-table']/div[@class='container small']/div[@class='row']/div[@class='col-xs-12 js-competitions-grid']/div[@class='table-parent']/table[@class='table']/a[@class='Table-row Table-row--hover CompetitionsTable-row CompetitionsTable-row--borderBottom CompetitionsTable-row--even']")
-        self.driver.implicitly_wait(10)
-        results_1 = self.driver.find_elements_by_xpath("//div[@class='row']/div[@class='col-xs-12 js-competitions-grid']/div[@class='table-parent']/table[@class='table']/a[@class='Table-row Table-row--hover CompetitionsTable-row CompetitionsTable-row--borderBottom']/td[8]")
-        self.driver.implicitly_wait(10)
-        results_1.extend(results_2)
-        results = [result.text for result in results_1]
-        links_1.extend(links_2)
-        hrefs = [link.get_attribute('href') for link, res in zip(links_1, results) if res == 'Results']
-        return hrefs
+    def get_competitions(self):
+        #Well posed if filters are specified enough otherwise will return None's for dropdown tournament      
+        competitions = self.driver.find_elements_by_xpath(f"/html/body/section[2]/section/div/div/div[1]/div/table/a")
+        metadata = [(comp.text.split('\n'), comp.get_attribute('href')) for comp in competitions]
+        return metadata
 
     def tournament_metadata(self):
         month_to_num = {
@@ -368,6 +450,12 @@ class WebScrapper:
         ActionChains(self.driver).move_to_element(submit).click(submit).perform()
         time.sleep(4)
 
+    def open_window(self, link):
+        self.driver.execute_script(f'''window.open("{link}", '_blank')''')
+        main_window, new_window = self.driver.window_handles
+        self.driver.switch_to.window(new_window)
+        return new_window
+
     def scrape(self):
         self.open_competions()
         consecutive_fails = 0
@@ -395,3 +483,61 @@ class WebScrapper:
             next_button = self.driver.find_element_by_xpath("//div[@class='table-parent']/div[@class='text-center']/ul[@class='pager']/li[7]/a")
             self.driver.implicitly_wait(10)
             ActionChains(self.driver).move_to_element(next_button).click(next_button).perform()
+
+
+
+
+def parse_metadata(metadata):
+    metadata = metadata.split('\n')
+    return metadata
+
+def parse_pool(pool):
+    pool = pool[2:]
+    for elem in pool:
+        if not elem.isnumeric():
+            break 
+        last_elem = elem
+    pool_size = int(last_elem)
+    def chunker(seq, size):
+        for pos in range(0, len(seq), size):
+            yield seq[pos:pos + size]
+    bouts = {}
+    for elem in chunker(pool[pool_size+4:], pool_size + 6):
+        fencer = Fencer()
+        fencer.country = elem[1]
+        last_name, first_name = elem[2].rsplit(' ', 1)
+        fencer.first_name = first_name.upper()
+        fencer.last_name = last_name.upper()
+        bouts[fencer] = elem[3:3+pool_size-1] 
+        #bouts[''.join([first_name.upper(), ' ', last_name.upper()])] = elem[3:3+pool_size-1]
+    return bouts 
+
+def pool_to_db(pool, session):
+    pool_bouts = parse_pool(pool)
+    for i, (fencer, fencer_bouts) in enumerate(pool_bouts.items()):
+        f1 = session.query(Fencer).filter_by(first_name=fencer.first_name, last_name=fencer.last_name, country=fencer.country)
+        if not f1:
+            f1 = fencer
+        for j, b in enumerate(fencer_bouts):
+            op = list(pool_bouts.keys())[j if j < i else j+1] 
+            f2 = session.query(Fencer).filter_by(first_name=op.first_name, last_name=op.last_name, country=op.country)
+            if not f2:
+                f2 = op
+            op_bout = pool_bouts[op][i if i <= j else i-1]
+            f1_res, f1_score = b.split('/')
+            f2_res, f2_score = op_bout.split('/')
+            if f1_res == 'V':
+                f_win = f1
+                f_win_score = f1_score
+                f_lose = f2 
+                f_lose_score = f2_score
+            else:
+                f_win = f2
+                f_win_score = f2_score
+                f_lose = f1 
+                f_lose_score = f1_score
+            local_bout = Bout(fencer_w_score = f_win_score, fencer_l_score = f_lose_score, rnd = 'P', fencer_win=f_win, fencer_lose = f_lose)
+            session.add(local_bout) 
+
+
+
