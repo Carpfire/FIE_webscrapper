@@ -1,0 +1,84 @@
+POOL 1
+Referees: PAGHIEV Mihail (MDA)
+1
+2
+3
+4
+5
+6
+V/M
+HS
+HR
+HS/HR
+1
+JPN
+MINOBE Kazuyasu
+V/5
+V/5
+V/1
+V/2
+D/3
+0.8
+16
+12
+4
+2
+ITA
+PAOLINI Giacomo
+D/2
+D/3
+D/2
+D/1
+V/5
+0.2
+13
+22
+-9
+3
+USA
+HADZIC Alen
+D/4
+V/5
+V/5
+D/1
+D/2
+0.4
+17
+16
+1
+4
+POL
+BIELEC Maciej
+D/0
+V/5
+D/1
+V/2
+V/5
+0.6
+13
+13
+0
+5
+EGY
+ELSOKKARY Ahmad
+D/1
+V/5
+V/2
+D/1
+D/3
+0.4
+12
+10
+2
+6
+GEO
+GALUASHVILI Lasha
+V/5
+D/2
+V/5
+D/4
+V/4
+0.6
+20
+18
+2
