@@ -3,12 +3,12 @@ from sqlalchemy.orm import relationship
 from .database import Base
 
 
-fencers = Table(
-    'fencers_bouts',
-    Base.metadata,
-    Column('fencers_id', Integer, ForeignKey('fencer.id')), 
-    Column('bout_id', Integer, ForeignKey('bout.id')) 
-)
+# fencers = Table(
+#     'fencers_bouts',
+#     Base.metadata,
+#     Column('fencers_id', Integer, ForeignKey('fencer.id')), 
+#     Column('bout_id', Integer, ForeignKey('bout.id')) 
+# )
 
 tourn_fen = Table(
     'fencers_tournament',
@@ -26,8 +26,6 @@ class Fencer(Base):
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=False)
     country = Column(String(255))
-
-
 
 class Tournament(Base):
     
@@ -49,10 +47,14 @@ class Bout(Base):
     tournament_id = Column(Integer, ForeignKey('tournament.id'))
     fencer_w_score = Column(Integer)
     fencer_l_score = Column(Integer)
-    rnd = Column(String)
-    fencer_win =  relationship('Fencer', secondary=fencers, backref='bouts', lazy='select')
-    fencer_lose = relationship('Fencer', secondary=fencers, backref='bouts', lazy='select')
-
+    rnd = Column(String(255))
+    fencer_win_id = Column(Integer, ForeignKey('fencer.id')) 
+    fencer_win = relationship("Fencer", foreign_keys=[fencer_win_id], backref='bout_win')
+    fencer_lose_id = Column(Integer, ForeignKey('fencer.id')) 
+    fencer_lose = relationship("Fencer", foreign_keys=[fencer_lose_id], backref='bout_lose')
+    
+    def __repr__(self):
+        return f"{''.join([self.fencer_win.first_name, ' ', self.fencer_win.last_name, ' ',  str(self.fencer_w_score)])} to {''.join([self.fencer_lose.first_name, ' ', self.fencer_lose.last_name, ' ', str(self.fencer_l_score)])}"
 
 
 #Will implement after web scrapping -> database is working

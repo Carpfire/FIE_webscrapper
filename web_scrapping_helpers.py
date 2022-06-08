@@ -1,5 +1,4 @@
-from xmlrpc.client import Boolean
-from importlib_metadata import Deprecated
+from re import S
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
@@ -512,18 +511,18 @@ def parse_pool(pool):
         #bouts[''.join([first_name.upper(), ' ', last_name.upper()])] = elem[3:3+pool_size-1]
     return bouts 
 
-def pool_to_db(pool, session):
-    pool_bouts = parse_pool(pool)
+def pool_to_db(pool_bouts, tournament, session):
     for i, (fencer, fencer_bouts) in enumerate(pool_bouts.items()):
-        f1 = session.query(Fencer).filter_by(first_name=fencer.first_name, last_name=fencer.last_name, country=fencer.country)
+        if i == len(pool_bouts): break
+        f1 = session.query(Fencer).filter_by(first_name=fencer.first_name, last_name=fencer.last_name, country=fencer.country).first()
         if not f1:
             f1 = fencer
-        for j, b in enumerate(fencer_bouts):
-            op = list(pool_bouts.keys())[j if j < i else j+1] 
-            f2 = session.query(Fencer).filter_by(first_name=op.first_name, last_name=op.last_name, country=op.country)
+        for j, b in enumerate(fencer_bouts[i:], start = i+1):
+            op = list(pool_bouts.keys())[j] 
+            f2 = session.query(Fencer).filter_by(first_name=op.first_name, last_name=op.last_name, country=op.country).first()
             if not f2:
                 f2 = op
-            op_bout = pool_bouts[op][i if i <= j else i-1]
+            op_bout = pool_bouts[op][i]
             f1_res, f1_score = b.split('/')
             f2_res, f2_score = op_bout.split('/')
             if f1_res == 'V':
@@ -536,8 +535,25 @@ def pool_to_db(pool, session):
                 f_win_score = f2_score
                 f_lose = f1 
                 f_lose_score = f1_score
-            local_bout = Bout(fencer_w_score = f_win_score, fencer_l_score = f_lose_score, rnd = 'P', fencer_win=f_win, fencer_lose = f_lose)
-            session.add(local_bout) 
+            session.add(f_win)
+            session.add(f_lose)
+            local_bout = Bout(fencer_w_score = f_win_score, fencer_l_score = f_lose_score, rnd = 'P')
+            session.add(local_bout)
+            local_bout.fencer_win = f_win
+            local_bout.fencer_lose = f_lose
+            tournament.bouts.append(local_bout)
+            tournament.fencers.extend([f_win, f_lose])
 
+            
+def tournament_to_db(tourn_data, session):
+    tournament = Tournament()
+    tournament.country = tourn_data[2][1:3]
+    tournament.city = tourn_data[1]
+    tournament.bouts = []
+    s_day, s_month, s_year = tourn_data[3].split(' ')[1].split('-')
+    e_day, e_month, e_year = tourn_data[4].split(' ')[1].split('-')
+    tournament.start_date = datetime.date(year=int(s_year), month=int(s_month), day=int(s_day)) 
+    tournament.end_date = datetime.date(year=int(e_year), month=int(e_month), day=int(e_day))
+    return tournament 
 
 
