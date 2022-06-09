@@ -26,6 +26,9 @@ class Fencer(Base):
     first_name = Column(String(255), nullable=False)
     last_name = Column(String(255), nullable=False)
     country = Column(String(255))
+    
+    def __repr__(self):
+        return f"{self.first_name} {self.last_name}, {self.country}"
 
 class Tournament(Base):
     
@@ -37,7 +40,9 @@ class Tournament(Base):
     end_date = Column(Date)
     bouts = relationship('Bout', backref='tournament', lazy='select')
     fencers = relationship('Fencer', secondary=tourn_fen, backref='tournament', lazy='select')
-
+    
+    def __repr__(self):
+        return f"{self.city},{self.country}:{str(self.start_date)-str(self.end_date)}"
 
 
 class Bout(Base):
