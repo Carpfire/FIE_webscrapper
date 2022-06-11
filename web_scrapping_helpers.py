@@ -1,4 +1,4 @@
-from re import S
+from re import I, S
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
@@ -110,8 +110,18 @@ class FIEPage:
         self.driver.implicitly_wait(10)
         ActionChains(self.driver).move_to_element(button).click(button).perform()
         return self
-
-    def next_round(self):
+    def next_round_prelim(self, option=False):
+        if not option:
+            button_path = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[4]/div[2]/div/div[2]/div[5]/div'
+        else:
+            button_path = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[4]/div[2]/div/div[2]/div[4]/div'
+        
+        button = self.driver.find_element_by_xpath(button_path)
+        self.driver.implicitly_wait(10)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+    
+    def next_round_de(self):
         button_path = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[5]/div[2]/div/div[2]/div[8]/div'
         button = self.driver.find_element_by_xpath(button_path)
         self.driver.implicitly_wait(10)
@@ -123,7 +133,8 @@ class FIEPage:
         bout_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[4]/div[2]/div/div[2]/div/div'
         bouts = self.driver.find_elements_by_xpath(bout_xpath)
         bout_data = [bout.text.split('\n') for bout in bouts]
-        return [bout for bout in bout_data if len(bout) == 6]
+        return [tuple(bout) for bout in bout_data if len(bout) == 6]
+
     def get_pools_data(self):
         pool_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[2]/div[2]/div/div'
         pool = self.driver.find_elements_by_xpath(pool_xpath)
@@ -175,277 +186,22 @@ class FIEPage:
         metadata = [(comp.text.split('\n'), comp.get_attribute('href')) for comp in competitions]
         return metadata
 
-    def tournament_metadata(self):
-        month_to_num = {
-            'Jan':1, 
-            'Feb':2,
-            'Mar':3,
-            'Apr':4,
-            'May':5,
-            'Jun':6,
-            'Jul':7,
-            'Aug':8,
-            'Sep':9,
-            'Oct':10,
-            'Nov':11,
-            'Dec':12,
-            }
-        date = self.driver.find_element_by_xpath("//span[@class='CompetitionHero-date']")
-        self.driver.implicitly_wait(10)
-        city = self.driver.find_element_by_xpath("//div[@class='Overview-section']/div[@class='Overview-group'][1]/div[@class='Table-country Overview-country Overview-label--dark']/span[@class='Overview-country-name']")
-        self.driver.implicitly_wait(10)
-        country = self.driver.find_element_by_xpath("//div[@class='Overview-section']/div[@class='Overview-group'][2]/div[@class='Table-country Overview-country Overview-label--dark']/span[@class='Overview-country-name']")
-        self.driver.implicitly_wait(10)
-        country = country.text.split(' ')[0]
-        city = city.text
-        date = date.text
-        date = date.split(' ')
-        date = datetime.date(int(date[-1]), month_to_num[date[1]], int(date[0]))
+    # def to_tableue(self):
+    #     results = self.driver.find_element_by_xpath("//div[@id='results']/div[@class='Tabs-nav-link js-tabs-nav-link']")
+    #     self.driver.implicitly_wait(10)
+    #     ActionChains(self.driver).move_to_element(results).click(results).perform()
+    #     #navigate to round of 64 tableu
+    #     tab_items =self.driver.find_elements_by_xpath("//div[@class='Subtabs-nav-items Subtabs-nav-items--centered']/div[@class='Subtabs-nav-item js-subtabs-nav-item']")
+    #     self.driver.implicitly_wait(10)
+    #     tab_labels = [tab_item.text for tab_item in tab_items]
+    #     if 'Tableau' in tab_labels:
+    #         ind = tab_labels.index('Tableau')
+    #         button = tab_items[ind]
+    #         ActionChains(self.driver).move_to_element(button).click(button).perform()
+    #         success = True
+    #     else: success = False
+    #     return success
 
-        return date, country, city
-
-    def to_tableue(self):
-        results = self.driver.find_element_by_xpath("//div[@id='results']/div[@class='Tabs-nav-link js-tabs-nav-link']")
-        self.driver.implicitly_wait(10)
-        ActionChains(self.driver).move_to_element(results).click(results).perform()
-        #navigate to round of 64 tableu
-        tab_items =self.driver.find_elements_by_xpath("//div[@class='Subtabs-nav-items Subtabs-nav-items--centered']/div[@class='Subtabs-nav-item js-subtabs-nav-item']")
-        self.driver.implicitly_wait(10)
-        tab_labels = [tab_item.text for tab_item in tab_items]
-        if 'Tableau' in tab_labels:
-            ind = tab_labels.index('Tableau')
-            button = tab_items[ind]
-            ActionChains(self.driver).move_to_element(button).click(button).perform()
-            success = True
-        else: success = False
-        return success
-
-    def populate_db(self, bouts, date, country, city):
-        tournament = Tournament(country=country, city=city, date=date)
-        fencers = []
-        with SessionLocal as session, session.begin():
-            for bout in bouts[:32]:
-                
-                rnd = 64
-                fencer_1, fencer_2 = bout
-                fencer_1, fencer_2 = fencer_1.split('\n'), fencer_2.split('\n')
-                name_1, name_2 = fencer_1[0].split(' '), fencer_2[0].split(' ')
-                first_names_1 = []
-                last_names_1 = []
-                first_names_2 = []
-                last_names_2 = []
-                for name in name_1:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_1 = ' '.join(first_names_1)
-                last_name_1 = ' '.join(last_names_1)
-
-                for name in name_2:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_2 = ' '.join(first_names_2)
-                last_name_2 = ' '.join(last_names_2)
-                print(first_name_1, last_name_1, first_name_2, last_name_2)
-                country_1, country_2 = fencer_1[1], fencer_2[1]
-                score_1, score_2 = fencer_1[2], fencer_2[2]
-                f1 = session.query(Fencer).filter_by(first_name = first_name_1).filter_by(last_name=last_name_1).first()
-                if not f1:
-                    f1 = Fencer(first_name = first_name_1, last_name = last_name_1, country = country_1)
-                    session.add(f1)
-                f2 = session.query(Fencer).filter_by(first_name = first_name_2).filter_by(last_name=last_name_2).first()
-                if not f2:
-                    f2 = Fencer(first_name = first_name_2, last_name = last_name_2, country = country_2)
-                    session.add(f2)
-                fencers.extend([f1, f2])
-                local_bout = Bout(fencer_1_score= score_1, fencer_2_score=score_2, rnd = rnd)
-                session.add(local_bout)
-                local_bout.fencers.extend([f1, f2])
-                tournament.bouts.append(local_bout)        
-
-            for bout in bouts[32:48]:
-                
-                rnd = 32
-                fencer_1, fencer_2 = bout
-                fencer_1, fencer_2 = fencer_1.split('\n'), fencer_2.split('\n')
-                name_1, name_2 = fencer_1[0].split(' '), fencer_2[0].split(' ')
-                first_names_1 = []
-                last_names_1 = []
-                first_names_2 = []
-                last_names_2 = []
-                for name in name_1:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_1 = ' '.join(first_names_1)
-                last_name_1 = ' '.join(last_names_1)
-
-                for name in name_2:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-
-                first_name_2 = ' '.join(first_names_2)
-                last_name_2 = ' '.join(last_names_2)
-                country_1, country_2 = fencer_1[1], fencer_2[1]
-                score_1, score_2 = fencer_1[2], fencer_2[2]
-                f1 = session.query(Fencer).filter_by(first_name = first_name_1).filter_by(last_name = last_name_1).first()         
-                f2 = session.query(Fencer).filter_by(first_name = first_name_2).filter_by(last_name = last_name_2).first()           
-                fencers.extend([f1, f2])
-                local_bout = Bout(fencer_1_score= score_1, fencer_2_score=score_2, rnd = rnd)
-                session.add(local_bout)
-                local_bout.fencers.extend([f1, f2])
-                tournament.bouts.append(local_bout)
-
-            for bout in bouts[48:56]:
-                
-                rnd=16
-                fencer_1, fencer_2 = bout
-                fencer_1, fencer_2 = fencer_1.split('\n'), fencer_2.split('\n')
-                name_1, name_2 = fencer_1[0].split(' '), fencer_2[0].split(' ')
-                first_names_1 = []
-                last_names_1 = []
-                first_names_2 = []
-                last_names_2 = []
-                for name in name_1:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_1 = ' '.join(first_names_1)
-                last_name_1 = ' '.join(last_names_1)
-
-                for name in name_2:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_2 = ' '.join(first_names_2)
-                last_name_2 = ' '.join(last_names_2)
-
-                country_1, country_2 = fencer_1[1], fencer_2[1]
-                score_1, score_2 = fencer_1[2], fencer_2[2]
-                f1 = session.query(Fencer).filter_by(first_name = first_name_1).filter_by(last_name = last_name_1).first()         
-                f2 = session.query(Fencer).filter_by(first_name = first_name_2).filter_by(last_name = last_name_2).first()           
-                fencers.extend([f1, f2])
-                local_bout = Bout(fencer_1_score= score_1, fencer_2_score=score_2, rnd = rnd)
-                session.add(local_bout)
-                local_bout.fencers.extend([f1, f2])
-                tournament.bouts.append(local_bout)
-
-            for bout in bouts[56:60]:
-                rnd = 8
-                fencer_1, fencer_2 = bout
-                fencer_1, fencer_2 = fencer_1.split('\n'), fencer_2.split('\n')
-                name_1, name_2 = fencer_1[0].split(' '), fencer_2[0].split(' ')
-                first_names_1 = []
-                last_names_1 = []
-                first_names_2 = []
-                last_names_2 = []
-                for name in name_1:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_1 = ' '.join(first_names_1)
-                last_name_1 = ' '.join(last_names_1)
-
-                for name in name_2:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_2 = ' '.join(first_names_2)
-                last_name_2 = ' '.join(last_names_2)
-                country_1, country_2 = fencer_1[1], fencer_2[1]
-                score_1, score_2 = fencer_1[2], fencer_2[2]
-                f1 = session.query(Fencer).filter_by(first_name = first_name_1).filter_by(last_name = last_name_1).first()         
-                f2 = session.query(Fencer).filter_by(first_name = first_name_2).filter_by(last_name = last_name_2).first()           
-                fencers.extend([f1, f2])
-                session.add(f1)
-                session.add(f2)
-                local_bout = Bout(fencer_1_score= score_1, fencer_2_score=score_2, rnd = rnd)
-                session.add(local_bout)
-                local_bout.fencers.extend([f1, f2])
-                tournament.bouts.append(local_bout)
-
-            for bout in bouts[60:62]:
-                
-                rnd = 4
-                fencer_1, fencer_2 = bout
-                fencer_1, fencer_2 = fencer_1.split('\n'), fencer_2.split('\n')
-                name_1, name_2 = fencer_1[0].split(' '), fencer_2[0].split(' ')
-                first_names_1 = []
-                last_names_1 = []
-                first_names_2 = []
-                last_names_2 = []
-                for name in name_1:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_1 = ' '.join(first_names_1)
-                last_name_1 = ' '.join(last_names_1)
-
-                for name in name_2:
-                    if name.isupper():
-                        name = ''.join([name[0], name[1:].lower()])
-                        last_names_1.append(name)
-                    else: first_names_1.append(name)
-                first_name_2 = ' '.join(first_names_2)
-                last_name_2 = ' '.join(last_names_2)
-                country_1, country_2 = fencer_1[1], fencer_2[1]
-                score_1, score_2 = fencer_1[2], fencer_2[2]
-                f1 = session.query(Fencer).filter_by(first_name = first_name_1).filter_by(last_name = last_name_1).first()         
-                f2 = session.query(Fencer).filter_by(first_name = first_name_2).filter_by(last_name = last_name_2).first()           
-                fencers.extend([f1, f2])
-                session.add(f1)
-                session.add(f2)
-                local_bout = Bout(fencer_1_score= score_1, fencer_2_score=score_2, rnd = rnd)
-                session.add(local_bout)
-                local_bout.fencers.extend([f1, f2])
-                tournament.bouts.append(local_bout) 
-
-            rnd = 2
-            fencer_1, fencer_2 = bouts[-1]
-            fencer_1, fencer_2 = fencer_1.split('\n'), fencer_2.split('\n')
-            name_1, name_2 = fencer_1[0].split(' '), fencer_2[0].split(' ')
-            first_names_1 = []
-            last_names_1 = []
-            first_names_2 = []
-            last_names_2 = []
-            for name in name_1:
-                if name.isupper():
-                    name = ''.join([name[0], name[1:].lower()])
-                    last_names_1.append(name)
-                else: first_names_1.append(name)
-            first_name_1 = ' '.join(first_names_1)
-            last_name_1 = ' '.join(last_names_1)
-
-            for name in name_2:
-                if name.isupper():
-                    name = ''.join([name[0], name[1:].lower()])
-                    last_names_1.append(name)
-                else: first_names_1.append(name)
-            first_name_2 = ' '.join(first_names_2)
-            last_name_2 = ' '.join(last_names_2)
-            country_1, country_2 = fencer_1[1], fencer_2[1]
-            score_1, score_2 = fencer_1[2], fencer_2[2]
-            f1 = session.query(Fencer).filter_by(first_name = first_name_1).filter_by(last_name = last_name_1).first()         
-            f2 = session.query(Fencer).filter_by(first_name = first_name_2).filter_by(last_name = last_name_2).first()           
-            fencers.extend([f1, f2])
-            session.add(f1)
-            session.add(f2)
-            local_bout = Bout(fencer_1_score= score_1, fencer_2_score=score_2, rnd = rnd)
-            session.add(local_bout)
-            local_bout.fencers.extend([f1, f2])
-            tournament.bouts.append(local_bout) 
-            tournament.fencers.extend(fencers)
 
 
     def search(self):
@@ -495,6 +251,12 @@ def parse_metadata(metadata):
     metadata = metadata.split('\n')
     return metadata
 
+
+def chunker(seq, size):
+    for pos in range(0, len(seq), size):
+        yield seq[pos:pos + size]
+
+
 def parse_pool(pool):
     pool = pool[2:]
     for elem in pool:
@@ -519,6 +281,7 @@ def parse_pool(pool):
     
 def parse_name(name):
     split_names = name.split(' ')
+    print(split_names)
     last_name = []
     first_name = []
     for name in split_names:
@@ -556,7 +319,7 @@ def pool_to_db(pool_bouts, tournament, session):
                 f_lose_score = f1_score
             session.add(f_win)
             session.add(f_lose)
-            local_bout = Bout(fencer_w_score = f_win_score, fencer_l_score = f_lose_score, rnd = 'P')
+            local_bout = Bout(fencer_w_score = f_win_score, fencer_l_score = f_lose_score, round = 'P')
             session.add(local_bout)
             local_bout.fencer_win = f_win
             local_bout.fencer_lose = f_lose
@@ -564,9 +327,9 @@ def pool_to_db(pool_bouts, tournament, session):
             tournament.fencers.extend([f_win, f_lose])
 
             
-def round_to_db(round, tournament, session):
+def round_to_db(bouts, rnd, tournament, session):
     round_bouts = []
-    for bout in round:
+    for bout in bouts:
         f1_name, f1_country, f1_score, f2_name, f2_country, f2_score = bout
         f1_first_name, f1_last_name = parse_name(f1_name)
         f2_first_name, f2_last_name = parse_name(f2_name)
@@ -591,7 +354,7 @@ def round_to_db(round, tournament, session):
             win_score = f2_score 
             lose_fencer = f1
             lose_score = f1_score
-        local_bout = Bout(fencer_w_score = win_score, fencer_l_score = lose_score, fencer_win=win_fencer, fencer_lose=lose_fencer)
+        local_bout = Bout(fencer_w_score = win_score, fencer_l_score = lose_score, fencer_win=win_fencer, fencer_lose=lose_fencer, round = rnd)
         session.add(local_bout)
         tournament.bouts.append(local_bout)
         round_bouts.append(local_bout)

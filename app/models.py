@@ -52,7 +52,7 @@ class Bout(Base):
     tournament_id = Column(Integer, ForeignKey('tournament.id'))
     fencer_w_score = Column(Integer)
     fencer_l_score = Column(Integer)
-    rnd = Column(String(255))
+    round = Column(String(255))
     fencer_win_id = Column(Integer, ForeignKey('fencer.id')) 
     fencer_win = relationship("Fencer", foreign_keys=[fencer_win_id], backref='bout_win')
     fencer_lose_id = Column(Integer, ForeignKey('fencer.id')) 
