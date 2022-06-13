@@ -42,7 +42,7 @@ class Tournament(Base):
     fencers = relationship('Fencer', secondary=tourn_fen, backref='tournament', lazy='select')
     
     def __repr__(self):
-        return f"{self.city},{self.country}:{str(self.start_date)-str(self.end_date)}"
+        return f"{self.city},{self.country}:{str(self.start_date)}-->{str(self.end_date)}"
 
 
 class Bout(Base):

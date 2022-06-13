@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 
 class FIEPage:
 
-    def __init__(self, weapon, age, comp_type, gender, team=False):
+    def __init__(self, weapon=None, age=None, comp_type=None, gender=None, team=False):
         self.service = Service(executable_path=ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service = self.service)
         self.weapon = weapon
@@ -128,7 +128,18 @@ class FIEPage:
         ActionChains(self.driver).move_to_element(button).click(button).perform()
         return self
 
+    def get_pool_names(self):
+        path = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div[1]/div/div/div[2]/div'
+        bouts = self.driver.find_elements_by_xpath(path)
+        return [fencer.get_property('title') for fencer in bouts]
 
+    def next_page_tournaments(self):
+        path = '/html/body/section[2]/section/div/div/div[1]/div/div/ul/li[7]/a'
+        button = self.driver.find_element_by_xpath(path)
+        self.driver.implicitly_wait(10)
+        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        return self
+    
     def get_prelim_data(self):
         bout_xpath = '/html/body/div[4]/div/div/div[2]/div[3]/div/div/div[4]/div[2]/div/div[2]/div/div'
         bouts = self.driver.find_elements_by_xpath(bout_xpath)
@@ -153,12 +164,18 @@ class FIEPage:
         button = self.driver.find_element_by_xpath(button_path)
         ActionChains(self.driver).move_to_element(button).click(button).perform()
         return self
+
     def prev_page(self):
         button_path = '/html/body/section[2]/section/div/div/div[1]/div/div/ul/li[1]/a'
         button = self.driver.find_element_by_xpath(button_path)
         ActionChains(self.driver).move_to_element(button).click(button).perform()
         return self
-    
+
+    def close_window(self):
+        self.driver.close()
+        self.driver.implicitly_wait(10)
+
+
     def parse_tableue(self):
 
         size = ['small', 'medium', 'medium', 'big', 'big', 'big']
@@ -257,27 +274,27 @@ def chunker(seq, size):
         yield seq[pos:pos + size]
 
 
-def parse_pool(pool):
+def parse_pool(pool, pool_name):
     pool = pool[2:]
     for elem in pool:
         if not elem.isnumeric():
             break 
         last_elem = elem
+    
     pool_size = int(last_elem)
     def chunker(seq, size):
         for pos in range(0, len(seq), size):
             yield seq[pos:pos + size]
     bouts = {}
-    for elem in chunker(pool[pool_size+4:], pool_size + 6):
+    for name, elem in zip(pool_name, chunker(pool[pool_size+4:], pool_size + 6)):
         fencer = Fencer()
         fencer.country = elem[1]
-        name = elem[2]
         first_name, last_name = parse_name(name)
         fencer.first_name = first_name
         fencer.last_name = last_name
         bouts[fencer] = elem[3:3+pool_size-1] 
         #bouts[''.join([first_name.upper(), ' ', last_name.upper()])] = elem[3:3+pool_size-1]
-    return bouts 
+    return bouts, pool_size
     
 def parse_name(name):
     split_names = name.split(' ')
