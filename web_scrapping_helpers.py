@@ -134,10 +134,10 @@ class FIEPage:
         return [fencer.get_property('title') for fencer in bouts]
 
     def next_page_tournaments(self):
-        path = '/html/body/section[2]/section/div/div/div[1]/div/div/ul/li[7]/a'
-        button = self.driver.find_element_by_xpath(path)
+        path = '/html/body/section[2]/section/div/div/div[1]/div/div/ul/li/a'
+        button = self.driver.find_elements_by_xpath(path)
         self.driver.implicitly_wait(10)
-        ActionChains(self.driver).move_to_element(button).click(button).perform()
+        ActionChains(self.driver).move_to_element(button[-1]).click(button[-1]).perform()
         return self
     
     def get_prelim_data(self):
