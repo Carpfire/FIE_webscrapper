@@ -2,4 +2,12 @@
 
 {% block content %}
     <h1>{% block title %}Welcome to the FencingDB home page{% endblock %}</h1>
+    {% for fencer in fencers %}
+        {%if loop.index < 10 %}
+            <a href="{{ url_for('fencer', fencer_id = fencer['id'])}}">
+                <h2>{{ fencer['first_name'] + ' ' + fencer['last_name']}}</h2>
+            </a>
+            <span class="badge badge-primary">{{fencer['country']}}</span>
+        {% endif %}
+    {% endfor %}
 {% endblock %}

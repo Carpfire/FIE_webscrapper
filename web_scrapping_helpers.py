@@ -1,14 +1,13 @@
-from re import I, S
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
-from app.models import Tournament, Bout, Fencer
 from app.database import SessionLocal
 import time 
 import warnings
 import datetime
+import uuid
 from dataclasses import dataclass
 warnings.filterwarnings('ignore')
 
@@ -176,25 +175,25 @@ class FIEPage:
         self.driver.implicitly_wait(10)
 
 
-    def parse_tableue(self):
+    # def parse_tableue(self):
 
-        size = ['small', 'medium', 'medium', 'big', 'big', 'big']
-        rnd = ['64', '32', '16', '8', '4', '2']
-        nums = ["2", "1", "0"]*2
-        bouts = []
-        for i, s, r in zip(nums, size, rnd):
-            win = self.driver.find_elements_by_xpath(f"//div[@class='Tableau-elimination Tableau-elimination--{r} Tableau-elimination--{s} Tableau-elimination--visible-{i}']/div[@class='Tableau-round']/div[@class='Tableau-fencers']/div[@class='Tableau-fencer']")
-            self.driver.implicitly_wait(10)
-            lose = self.driver.find_elements_by_xpath(f"//div[@class='Tableau-elimination Tableau-elimination--{r} Tableau-elimination--{s} Tableau-elimination--visible-{i}']/div[@class='Tableau-round']/div[@class='Tableau-fencers']/div[@class='Tableau-fencer Tableau-fencer--defeated']")
-            self.driver.implicitly_wait(10)
-            for w_f, l_f in zip(win, lose):
-                bouts.append((w_f.text, l_f.text))
-            if int(i) == 0:
-                for i in range(3): 
-                    next_button = self.driver.find_elements_by_xpath("//div[@class='Tableau-container']/div[@class='Tableau-directionSquare Tableau-directionSquare--next']/div[@class='Tableau-direction Tableau-direction--next Tableau-direction--square']")
-                    self.driver.implicitly_wait(10)
-                    ActionChains(self.driver).move_to_element(next_button[1]).click(next_button[1]).perform()
-        return bouts
+    #     size = ['small', 'medium', 'medium', 'big', 'big', 'big']
+    #     rnd = ['64', '32', '16', '8', '4', '2']
+    #     nums = ["2", "1", "0"]*2
+    #     bouts = []
+    #     for i, s, r in zip(nums, size, rnd):
+    #         win = self.driver.find_elements_by_xpath(f"//div[@class='Tableau-elimination Tableau-elimination--{r} Tableau-elimination--{s} Tableau-elimination--visible-{i}']/div[@class='Tableau-round']/div[@class='Tableau-fencers']/div[@class='Tableau-fencer']")
+    #         self.driver.implicitly_wait(10)
+    #         lose = self.driver.find_elements_by_xpath(f"//div[@class='Tableau-elimination Tableau-elimination--{r} Tableau-elimination--{s} Tableau-elimination--visible-{i}']/div[@class='Tableau-round']/div[@class='Tableau-fencers']/div[@class='Tableau-fencer Tableau-fencer--defeated']")
+    #         self.driver.implicitly_wait(10)
+    #         for w_f, l_f in zip(win, lose):
+    #             bouts.append((w_f.text, l_f.text))
+    #         if int(i) == 0:
+    #             for i in range(3): 
+    #                 next_button = self.driver.find_elements_by_xpath("//div[@class='Tableau-container']/div[@class='Tableau-directionSquare Tableau-directionSquare--next']/div[@class='Tableau-direction Tableau-direction--next Tableau-direction--square']")
+    #                 self.driver.implicitly_wait(10)
+    #                 ActionChains(self.driver).move_to_element(next_button[1]).click(next_button[1]).perform()
+    #     return bouts
 
 
     def get_competitions(self):
@@ -274,7 +273,7 @@ def chunker(seq, size):
         yield seq[pos:pos + size]
 
 
-def parse_pool(pool, pool_name):
+def parse_pool(pool, pool_name, conn):
     pool = pool[2:]
     for elem in pool:
         if not elem.isnumeric():
@@ -287,12 +286,10 @@ def parse_pool(pool, pool_name):
             yield seq[pos:pos + size]
     bouts = {}
     for name, elem in zip(pool_name, chunker(pool[pool_size+4:], pool_size + 6)):
-        fencer = Fencer()
-        fencer.country = elem[1]
+        country = elem[1]
         first_name, last_name = parse_name(name)
-        fencer.first_name = first_name
-        fencer.last_name = last_name
-        bouts[fencer] = elem[3:3+pool_size-1] 
+        fencer_id = check_and_add(first_name, last_name, country,  conn)
+        bouts[fencer_id] = elem[3:3+pool_size-1] 
         #bouts[''.join([first_name.upper(), ' ', last_name.upper()])] = elem[3:3+pool_size-1]
     return bouts, pool_size
     
@@ -310,83 +307,129 @@ def parse_name(name):
     last_name = ' '.join(last_name)
     return first_name, last_name
 
-def pool_to_db(pool_bouts, tournament, session):
-    for i, (fencer, fencer_bouts) in enumerate(pool_bouts.items()):
+def check_and_add(first_name, last_name, country, conn):
+        f1 = conn.execute("SELECT f.id FROM fencers f WHERE f.first_name = ? AND f.last_name = ? AND f.country = ?", (first_name.upper(), last_name.upper(), country.upper())).fetchall()
+        if len(f1) != 0:
+            fencer_id = f1[0]['id']
+        else:
+            cur =  conn.cursor()
+            cur.execute("insert into fencers (first_name, last_name, country) values (?, ?, ?)", (first_name, last_name, country))
+            id = conn.execute("select f.id from fencers f where f.first_name = ? and f.last_name = ? and f.country = ?", (first_name.upper(), last_name.upper(), country.upper())).fetchall()
+            fencer_id = id[0]['id']
+            cur.close()
+        return fencer_id
+
+        
+
+
+def pool_to_db(pool_bouts, tournament_id, conn):
+    #When creating fencer objects in pools initially none will have ids so 
+    #need to check if they exist in the db and then add id to object
+    for i, (fencer_id, fencer_bouts) in enumerate(pool_bouts.items()):
         if i == len(pool_bouts): break
-        f1 = session.query(Fencer).filter_by(first_name=fencer.first_name, last_name=fencer.last_name, country=fencer.country).first()
-        if not f1:
-            f1 = fencer
+        #Check and add inserts into db if not there
+        # and returns fencer object with id
+        # f1 = session.query(Fencer).filter_by(first_name=fencer.first_name, last_name=fencer.last_name, country=fencer.country).first()
         for j, b in enumerate(fencer_bouts[i:], start = i+1):
-            op = list(pool_bouts.keys())[j] 
-            f2 = session.query(Fencer).filter_by(first_name=op.first_name, last_name=op.last_name, country=op.country).first()
-            if not f2:
-                f2 = op
-            op_bout = pool_bouts[op][i]
-            f1_res, f1_score = b.split('/')
-            f2_res, f2_score = op_bout.split('/')
-            if f1_res == 'V':
-                f_win = f1
-                f_win_score = f1_score
-                f_lose = f2 
-                f_lose_score = f2_score
+            op_id = list(pool_bouts.keys())[j] 
+            # f2 = session.query(Fencer).filter_by(first_name=op.first_name, last_name=op.last_name, country=op.country).first()
+            op_bout = pool_bouts[op_id][i]
+            fencer_res, fencer_score = b.split('/')
+            op_res, op_score = op_bout.split('/')
+            if fencer_res == 'V':
+                f_win_id = fencer_id
+                f_win_score = fencer_score
+                f_lose_id = op_id
+                f_lose_score = op_score 
             else:
-                f_win = f2
-                f_win_score = f2_score
-                f_lose = f1 
-                f_lose_score = f1_score
-            session.add(f_win)
-            session.add(f_lose)
-            local_bout = Bout(fencer_w_score = f_win_score, fencer_l_score = f_lose_score, round = 'P')
-            session.add(local_bout)
-            local_bout.fencer_win = f_win
-            local_bout.fencer_lose = f_lose
-            tournament.bouts.append(local_bout)
-            tournament.fencers.extend([f_win, f_lose])
+                f_win_id = op_id
+                f_win_score = op_score
+                f_lose_id = fencer_id 
+                f_lose_score = fencer_score
+            
+            cursor = conn.cursor()
+            bout_id = str(uuid.uuid4())
+            cursor.execute("INSERT INTO bouts (id, win_score, lose_score, round) VALUES (?, ?, ?, ?)", (bout_id, f_win_score, f_lose_score, 'P'))
+            cursor.execute("INSERT INTO winners (fencer_id, bout_id) VALUES (?, ?)", (f_win_id, bout_id))
+            cursor.execute("INSERT INTO losers (fencer_id, bout_id) VALUES (?, ?)", (f_lose_id, bout_id))
+            cursor.execute("INSERT INTO tournaments_to_bouts (tournament_id, bout_id) VALUES (?, ?)", (tournament_id, bout_id))
+            cursor.close()
+            #local_bout = Bout(fencer_w_score = f_win_score, fencer_l_score = f_lose_score, round = 'P')
+            # session.add(local_bout)
+            # local_bout.fencer_win = f_win
+            # local_bout.fencer_lose = f_lose
+            # tournament.bouts.append(local_bout)
+            # tournament.fencers.extend([f_win, f_lose])
 
             
-def round_to_db(bouts, rnd, tournament, session):
+def round_to_db(bouts, rnd, tournament_id, conn):
     round_bouts = []
     for bout in bouts:
         f1_name, f1_country, f1_score, f2_name, f2_country, f2_score = bout
         f1_first_name, f1_last_name = parse_name(f1_name)
         f2_first_name, f2_last_name = parse_name(f2_name)
+        f1_id = check_and_add(f1_first_name, f1_last_name, f1_country, conn)
+        f2_id = check_and_add(f2_first_name, f2_last_name, f2_country, conn)
 
-        f1 = session.query(Fencer).filter_by(first_name=f1_first_name, last_name=f1_last_name, country=f1_country).first() 
-        f2 = session.query(Fencer).filter_by(first_name=f2_first_name, last_name=f2_last_name, country=f2_country).first() 
-        if f1 is None: 
-            f1 = Fencer(first_name = f1_first_name, last_name=f1_last_name, country=f1_country)
-            session.add(f1)
-            tournament.fencers.append(f1)
-        if f2 is None:
-            f2 = Fencer(first_name = f2_first_name, last_name=f2_last_name, country=f2_country)
-            session.add(f2)
-            tournament.fencers.append(f2)
+
+        # f1 = session.query(Fencer).filter_by(first_name=f1_first_name, last_name=f1_last_name, country=f1_country).first() 
+        # f2 = session.query(Fencer).filter_by(first_name=f2_first_name, last_name=f2_last_name, country=f2_country).first() 
         if int(f1_score) > int(f2_score): 
-            win_fencer = f1
+            win_fencer_id = f1_id
             win_score = f1_score
-            lose_fencer = f2
+            lose_fencer_id = f2_id
             lose_score = f2_score
         else:
-            win_fencer = f2
+            win_fencer_id = f2_id
             win_score = f2_score 
-            lose_fencer = f1
+            lose_fencer_id = f1_id
             lose_score = f1_score
-        local_bout = Bout(fencer_w_score = win_score, fencer_l_score = lose_score, fencer_win=win_fencer, fencer_lose=lose_fencer, round = rnd)
-        session.add(local_bout)
-        tournament.bouts.append(local_bout)
-        round_bouts.append(local_bout)
+        curs = conn.cursor()
+        bout_id = str(uuid.uuid4())
+        curs.execute("INSERT INTO bouts  (id, win_score, lose_score, round) VALUES (?, ?, ?, ?)", (bout_id, win_score, lose_score, rnd))
+        curs.execute("INSERT INTO winners (fencer_id, bout_id) VALUES (?, ?)", (win_fencer_id, bout_id))
+        curs.execute("INSERT INTO losers (fencer_id, bout_id) VALUES (?, ?)", (lose_fencer_id, bout_id))
+        curs.execute("INSERT INTO tournaments_to_bouts (tournament_id, bout_id) VALUES (?, ?)", (tournament_id, bout_id))
+        curs.close()
     return round_bouts
 
 
-def tournament_to_db(tourn_data, session):
-    tournament = Tournament()
-    tournament.country = tourn_data[2][1:3]
-    tournament.city = tourn_data[1]
-    tournament.bouts = []
+def tournament_to_db(tourn_data, conn):
+    country = tourn_data[2][1:3]
+    city = tourn_data[1]
+    bouts = []
     s_day, s_month, s_year = tourn_data[3].split(' ')[1].split('-')
     e_day, e_month, e_year = tourn_data[4].split(' ')[1].split('-')
-    tournament.start_date = datetime.date(year=int(s_year), month=int(s_month), day=int(s_day)) 
-    tournament.end_date = datetime.date(year=int(e_year), month=int(e_month), day=int(e_day))
-    return tournament 
+    start_date = datetime.date(year=int(s_year), month=int(s_month), day=int(s_day)) 
+    end_date = datetime.date(year=int(e_year), month=int(e_month), day=int(e_day))
+    curs = conn.cursor()
+    curs.execute("INSERT INTO tournaments (country, city, start_date, end_date) VALUES (?, ?, ?, ?)", (country, city, start_date, end_date))
+    res = curs.execute("SELECT t.id FROM tournaments t WHERE t.country = ? AND t.city = ? AND t.start_date = ? AND t.end_date = ?", (country, city, start_date, end_date)).fetchall()
+    tournament_id = res[0]['id']
+    curs.close()
+    return tournament_id 
 
+@dataclass(init=False, unsafe_hash=True)
+class Fencer:
+    id: int = None
+    first_name: str
+    last_name: str
+    country: str
+
+@dataclass(init=False)
+class Bout:
+    id: int = None
+    win_score: int
+    lose_score: int
+    win_fencer: Fencer
+    lose_fencer: Fencer
+    rnd: str
+
+@dataclass(init=False)
+class Tournament:
+    id: int = None
+    country: str
+    city: str
+    start_date: datetime
+    end_date: datetime
 

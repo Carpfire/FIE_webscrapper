@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{% block title %}{{ fencer['first_name'] + ' ' + fencer['last_name']}}{% endblock %}</h2>
+<span class="badge badge-primary">{{fencer['country']}}</span>
+{% endblock %}
